@@ -1,0 +1,226 @@
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">  
+    
+  <script src="http://d3js.org/d3.v3.min.js"></script>
+  <script src="http://dimplejs.org/dist/dimple.v2.0.0.min.js"></script>
+  <script src="http://underscorejs.org/underscore.js"></script>
+  <script type="text/javascript">
+    function draw(data){
+               
+        "user strict";
+
+        var width = 960,
+            height = 640;
+        
+        
+		var svg = d3.select('body')
+        	.append('svg')
+        		.attr('width', 960)
+        		.attr('height', 640)
+        	.append('g')
+                .attr('class','chartContainer');
+
+
+        /*
+        Group the data based on height, handedness
+        */
+
+        function agg_data(leaves) {
+          var batting_avg = d3.mean(leaves, function(d) {
+              return +d['avg'];
+          });
+
+          var homerun_avg = d3.mean(leaves, function(d) {
+              return +d['HR'];
+          });
+
+          var count = d3.sum(leaves,function(d) {
+             return 1;
+           });
+
+          return {
+            'batting_avg' : batting_avg,
+            'homerun_avg' : homerun_avg,
+            'count' : count
+          };
+        }
+        
+        var nested=d3.nest()
+            .key(function(d){
+                return d['handedness'];
+            })
+            .key(function(d){
+                return d['height'];
+            })
+            .rollup(agg_data)
+            .entries(data)
+            .map(function(group){
+                return{
+                    key: group.key,
+                    values: group.values.map(function(group){
+                        return{
+                            xaxis: group.key,
+                            batting_avg: group.values.batting_avg,
+                            homerun_avg: group.values.homerun_avg,
+                            number_of_players: group.values.count
+                        }
+                    })
+                }
+            });
+
+        var flattened_Data = _.chain(nested)
+          .map(function(row, index){
+            return _.map(row.values, function(d){
+              return {
+                'Handedness' : row.key,
+                'Height' : d.xaxis,
+                'BattingAverage' : d.batting_avg,
+                'HomeRuns': Math.sqrt(d.homerun_avg), // return sqrt of hr
+                'Players' : d.number_of_players
+              }
+            });
+          })
+          .flatten()
+          .value();
+
+        console.log(JSON.stringify(flattened_Data));    
+
+        /*
+        Dimple.js Chart construction code
+     	 */
+
+        var myChart = new dimple.chart(svg, flattened_Data);
+        myChart.setBounds(75, 100, 540, 360);
+    	var x = myChart.addCategoryAxis("x", "Height");
+    	x.title = "Player's Height (inches)";
+        //x.overrideMin = 60; 
+        //x.overrideMax = 90;
+    	var y = myChart.addMeasureAxis("y", "BattingAverage");
+    	y.title = "Players' Batting Average (avg)";
+        y.tickFormat = ',.2f'; // set y-axis in two decimal 
+    	
+    	var z = myChart.addMeasureAxis("z", "HomeRuns");
+
+        // Control bubble sizes by setting the max and min values
+        //z.overrideMin = 0;
+        //z.overrideMax = 17;
+
+    	var bubble = myChart.addSeries("Handedness", dimple.plot.bubble);
+        //var line = myChart.addSeries('Handedness',dimple.plot.line);
+        
+        bubble.getTooltipText = function (d) {
+            for (i in flattened_Data){
+                if(flattened_Data[i].Height == d.cx && flattened_Data[i].Handedness == String(d.aggField[0])){
+                  var players = flattened_Data[i].Players;
+                  break;
+                }
+              }
+              return [
+                  
+                  "Height: " + d.cx,
+                  'Batting Average: '+ d3.format('.3f')(d.cy),
+                  "Home Runs: " + (d.cz*d.cz).toFixed(2),
+                  "Number of Players: " + players,
+                  
+              ];
+          };
+
+    	var myLegend = myChart.addLegend(620, 160, 60, 180, "right");
+        myChart.draw();
+
+        // This is a critical step.  By doing this we orphan the legend. This
+        // means it will not respond to graph updates.  Without this the legend
+        // will redraw when the chart refreshes removing the unchecked item and
+        // also dropping the events we define below.
+        myChart.legends = [];
+
+
+        // Add chart title
+        var title = d3.select('svg')
+            .append('text')
+            .attr("x", myChart._xPixels() + myChart._widthPixels() / 2)
+            .attr("y", myChart._yPixels() - 75)
+            .style("text-anchor", "middle")
+            .style("font-family", "sans-serif")
+            .style("font-weight", "bold")
+            .style("font-size", "20")
+            .text('Baseball Player Performance');
+
+        // Add text to explain 
+        svg.selectAll("explanatory_text")
+            .data(["The graph shows how player's height and handedness affect the performance. Each circle ","represents the average number of homeruns of players having the particular height on x-axis","and the aggregated batting average of those players on y-axis."])
+            .enter()
+            .append("text")
+              .attr("x", 100)
+              .attr("y", function(d, i) { return 50 + i *14; } )
+              .style("font-size", "11px")
+              .style("color", "Black")
+              .style("font-family", "sans-serif")
+              .text(function (d) { return d; });    
+
+        // Add the legend title
+        svg.selectAll("title_text")
+          .data(["Click legend to","show/hide player's"," handedness:"])
+          .enter()
+          .append("text")
+            .attr("x", 620)
+            .attr("y", function (d, i) { return 120 + i * 14; })
+            .style("font-family", "sans-serif")
+            .style("font-size", "10px")
+            .style("color", "Black")
+            .text(function (d) { return d; });
+
+
+        // Get a unique list of Owner values to use when filtering
+        var filterValues = dimple.getUniqueValues(flattened_Data, "Handedness");
+        // Get all the rectangles from our now orphaned legend
+        myLegend.shapes.selectAll("rect")
+          // Add a click event to each rectangle
+          .on("click", function (e) {
+            // This indicates whether the item is already visible or not
+            var hide = false;
+            var newFilters = [];
+            // If the filters contain the clicked shape hide it
+            filterValues.forEach(function (f) {
+              if (f === e.aggField.slice(-1)[0]) {
+                hide = true;
+              } else {
+                newFilters.push(f);
+              }
+            });
+            // Hide the shape or show it
+            if (hide) {
+              d3.select(this).style("opacity", 0.2);
+            } else {
+              newFilters.push(e.aggField.slice(-1)[0]);
+              d3.select(this).style("opacity", 0.8);
+            }
+            // Update the filters
+            filterValues = newFilters;
+            // Filter the data
+            myChart.data = dimple.filterData(flattened_Data, "Handedness", filterValues);
+            // Passing a duration parameter makes the chart animate. Without
+            // it there is no transition
+            myChart.draw(800);
+          });
+    };
+
+</script>
+
+</head>
+
+<body>
+
+    <script type="text/javascript">
+    
+    /*
+    Use D3 (not dimple.js) to load the TSV file
+    and pass the contents of it to the draw function
+    */
+    
+    d3.csv('baseball_data.csv', draw);
+    </script>
+</body>
+</html>

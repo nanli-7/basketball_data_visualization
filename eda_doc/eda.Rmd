@@ -1,0 +1,85 @@
+
+#  ------------------------------------------------------------------------
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+# Load all of the packages that you end up using
+# in your analysis in this code chunk.
+
+# Notice that the parameter "echo" was set to FALSE for this code chunk.
+# This prevents the code from displaying in the knitted HTML output.
+# You should set echo=FALSE for all code chunks in your file.
+
+library(ggplot2)
+library(dplyr)
+library(GGally)
+library(Hmisc)
+library(corrplot)
+library(gridExtra)
+library(psych)
+```
+
+```{r}
+names(baseball_data)
+summary(baseball_data)
+```
+
+```{r}
+ggplot(baseball_data, aes(height) ) + geom_histogram(fill ='blue') + theme_bw()
+```
+
+```{r}
+ggplot(aes(x=height,y=avg),data = baseball_data)+
+  geom_jitter(aes(color=handedness),alpha=0.7,size=1.5)+
+  scale_x_continuous(breaks = seq(65,80,1))+
+  scale_color_brewer(palette = "Set1")+
+  stat_summary(fun.y = "mean", 
+               geom = "line",
+               color = "orange2",
+               size = 1.2)+ theme_bw()
+ggsave('avg_by_height.png', width =7, height = 4.5
+       )
+```
+
+```{r}
+ggplot(aes(x=height,y=avg),data = baseball_data)+
+  geom_jitter(aes(color=handedness),alpha=0.7,size=1.5)+
+  scale_x_continuous(breaks = seq(65,80,1))+
+  scale_color_brewer(palette = "Set1")+
+  geom_line(aes(),stat = 'summary', fun.y = mean, color = "orange2",
+               size = 1.2)+ theme_bw()
+
+##ggsave('test.png', width =7, height = 4.5
+ ##     )
+```
+
+```{r}
+
+ggplot(aes(x=height,y=HR),data = baseball_data)+
+  geom_jitter(aes(color=handedness),alpha=0.7,size=1.5)+
+  scale_x_continuous(breaks = seq(65,80,1))+
+  scale_color_brewer(palette = "Set1")+
+  stat_summary(fun.y = "mean", 
+               geom = "line",
+               color = "red",
+               size = 1.5)+ theme_bw()+
+   geom_line(aes(color=handedness),stat = 'summary', fun.y = mean, linetype =3)
+```
+
+```{r}
+handed <- factor(baseball_data$handedness)
+```
+
+```{r}
+
+ggplot(aes(x=height,y=avg),data = baseball_data)+
+  geom_jitter(aes(color=handedness),alpha=0.7,size=1.5)+
+  scale_x_continuous(breaks = seq(65,80,1))+
+  scale_color_brewer(palette = "Set1")+
+  #stat_summary(fun.y = "mean", 
+  #             geom = "line",
+  #             color = "red",
+  #             size = 1.5)+ theme_bw()+
+   #geom_line(aes(color=handedness),stat = 'summary', fun.y = mean, linetype =3)+
+geom_smooth(aes(color=handedness),method = "loess", se = FALSE,size=1) + theme_bw()
+```
+

@@ -1,0 +1,154 @@
+
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">  
+    
+  <script src="http://d3js.org/d3.v3.min.js"></script>
+  <script src="http://dimplejs.org/dist/dimple.v2.0.0.min.js"></script>
+  <script src="http://underscorejs.org/underscore.js"></script>
+  <script type="text/javascript">
+    function draw(data){
+               
+        "user strict";
+
+        var width = 960,
+            height = 640;
+        
+        
+		var svg = d3.select('body')
+        	.append('svg')
+        		.attr('width', 960)
+        		.attr('height', 640)
+        	.append('g')
+                .attr('class','chartContainer');
+
+
+        /*
+        Group the data based on height, handedness
+        */
+
+        function agg_data(leaves) {
+          var batting_avg = d3.mean(leaves, function(d) {
+              return +d['avg'];
+          });
+
+          var homerun_avg = d3.mean(leaves, function(d) {
+              return +d['HR'];
+          });
+
+          var count = d3.sum(leaves,function(d) {
+             return 1;
+           });
+
+          return {
+            'batting_avg' : batting_avg,
+            'homerun_avg' : homerun_avg,
+            'count' : count
+          };
+        }
+        
+        var nested=d3.nest()
+            .key(function(d){
+                return d['handedness'];
+            })
+            .key(function(d){
+                return d['height'];
+            })
+            .rollup(agg_data)
+            .entries(data)
+            .map(function(group){
+                return{
+                    key: group.key,
+                    values: group.values.map(function(group){
+                        return{
+                            xaxis: group.key,
+                            batting_avg: group.values.batting_avg,
+                            homerun_avg: group.values.homerun_avg,
+                            number_of_players: group.values.count
+                        }
+                    })
+                }
+            });
+
+        var flattened_Data = _.chain(nested)
+          .map(function(row, index){
+            return _.map(row.values, function(d){
+              return {
+                'Handedness' : row.key,
+                'Height' : d.xaxis,
+                'BattingAverage' : d.batting_avg,
+                'HomeRuns': Math.sqrt(d.homerun_avg),
+                'Players' : d.number_of_players
+              }
+            });
+          })
+          .flatten()
+          .value();
+
+        console.log(JSON.stringify(flattened_Data));    
+
+        /*
+        Dimple.js Chart construction code
+     	 */
+
+        var myChart = new dimple.chart(svg, flattened_Data);
+        myChart.setBounds(75, 75, 540, 360);
+    	var x = myChart.addCategoryAxis("x", "Height");
+    	x.title = "Player's Height (inches)";
+    	var y = myChart.addMeasureAxis("y", "BattingAverage");
+    	y.title = "Average of Players' Batting Performnace (avg)";
+        y.tickFormat = ',.2f'; // set y-axis in two decimal 
+    	
+    	myChart.addMeasureAxis("z", "HomeRuns");
+    	var serie = myChart.addSeries("Handedness", dimple.plot.bubble);
+        
+        serie.getTooltipText = function (d) {
+            for (i in flattened_Data){
+                if(flattened_Data[i].Height == d.cx && flattened_Data[i].Handedness == String(d.aggField[0])){
+                  var players = flattened_Data[i].Players;
+                  break;
+                }
+              }
+              return [
+                  "Handedness: " + d.aggField[0],
+                  "Height: " + d.cx,
+                  'Batting Average: '+ d3.format('.3f')(d.cy),
+                  "Home Runs: " + (d.cz*d.cz).toFixed(2),
+                  "Number of Players: " + players,
+                  
+              ];
+          };
+
+    	myChart.addLegend(440, 80, 180, 60, "right");
+        myChart.draw();
+
+
+        var title = d3.select('svg')
+            .append('text')
+            .attr("x", myChart._xPixels() + myChart._widthPixels() / 2)
+            .attr("y", myChart._yPixels() - 45)
+            .style("text-anchor", "middle")
+            .style("font-family", "sans-serif")
+            .style("font-weight", "bold")
+            .style("font-size", "20")
+            .text('Baseball Player Performance');
+
+    }
+
+</script>
+
+</head>
+
+<body>
+
+    <script type="text/javascript">
+    
+    /*
+    Use D3 (not dimple.js) to load the TSV file
+    and pass the contents of it to the draw function
+    */
+    
+    d3.csv('baseball_data.csv', draw);
+    </script>
+</body>
+</html>
